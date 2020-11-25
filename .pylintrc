@@ -1,0 +1,9 @@
+[MASTER]
+
+disable=missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+    too-many-instance-attributes,
+    too-many-arguments,
+    too-few-public-methods,
+    duplicate-code

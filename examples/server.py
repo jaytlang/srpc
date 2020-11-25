@@ -1,14 +1,18 @@
 import ssl
-import os.path
+import os
 import asyncio
+import logging
 
 from srpc.config.config import ServerConfig, SharedConfig, RPCConfig
 from srpc.server.server import Server
 
-def main():
+LOGLEVEL = os.environ.get('LOGLEVEL', 'WARNING').upper()
+logging.basicConfig(level=LOGLEVEL)
+
+def main() -> None:
     server_config = ServerConfig(
         shared=SharedConfig(
-            address="0.0.0.0",
+            hostname="0.0.0.0",
             port=8000,
             certfile=os.path.join(os.path.dirname(__file__), "srpc.crt"),
             ssl_version=ssl.PROTOCOL_TLSv1_2
@@ -20,7 +24,7 @@ def main():
         )]
     )
     server = Server(server_config)
-    async def run_server():
+    async def run_server() -> None:
         async with server:
             while True:
                 await asyncio.sleep(0)

@@ -1,4 +1,5 @@
-from typing import Dict
+from typing import Dict, Optional, Type
+from types import TracebackType
 
 from srpc.config.config import ServerConfig
 from srpc.server.rpc_handler import RPCHandler
@@ -8,7 +9,12 @@ from srpc.server.authenticator import Authenticator
 
 class Server:
     def __init__(self, config: ServerConfig):
-        ssl_context = SSLContextBuilder(protocol=config.shared.ssl_version, keyfile=config.keyfile, certfile=config.shared.certfile).build_server()
+        ssl_context_builder = SSLContextBuilder(
+            protocol=config.shared.ssl_version,
+            keyfile=config.keyfile,
+            certfile=config.shared.certfile
+        )
+        ssl_context = ssl_context_builder.build_server()
         rpc_configs = config.rpcs
         rpcs: Dict[int, RPCHandler] = {}
         for rpc_config in rpc_configs:
@@ -18,11 +24,27 @@ class Server:
             rpc_handler = RPCHandler(rpc_config)
             rpcs[rpc_id] = rpc_handler
         authenticator = Authenticator()
-        self._server = RPCServer(config.shared.address, config.shared.port, ssl_context=ssl_context, authenticator=authenticator, rpcs=rpcs)
-    
-    async def __aenter__(self) -> 'Server':
+        self._server = RPCServer(
+            config.shared.hostname,
+            config.shared.port,
+            ssl_context=ssl_context,
+            authenticator=authenticator,
+            rpcs=rpcs
+        )
+
+    async def serve(self) -> None:
         await self._server.serve()
+
+    async def __aenter__(self) -> 'Server':
+        await self.serve()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        await self._server.close() 
+    async def close(self) -> None:
+        await self._server.close()
+
+    async def __aexit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+    ) -> None:
+        await self.close()

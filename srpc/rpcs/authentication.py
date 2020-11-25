@@ -22,6 +22,7 @@ def parse_auth_request(message: Message) -> Credentials:
     data = message.data
     assert message.rpc_id == AUTHENTICATION_RPC_ID, f"invalid RPC ID: {message.rpc_id}"
     data_json = json.loads(data)
+    assert isinstance(data_json, dict)
     return Credentials(**data_json)
 
 def create_auth_response(request_id: int, rpc_descriptors: Sequence[RPCDescriptor]) -> Message:
@@ -37,6 +38,7 @@ def parse_auth_response(message: Message) -> Sequence[RPCDescriptor]:
     data = message.data
     data_json = json.loads(data)
     rpc_descriptors: List[RPCDescriptor] = []
-    for rpc_descriptor in rpc_descriptors:
+    for rpc_descriptor in data_json:
+        assert isinstance(rpc_descriptor, dict)
         rpc_descriptors.append(RPCDescriptor(**rpc_descriptor))
     return rpc_descriptors

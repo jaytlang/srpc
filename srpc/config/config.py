@@ -1,10 +1,9 @@
 import dataclasses
-import ssl
-from typing import Sequence
+from typing import Sequence, Optional
 
 @dataclasses.dataclass(frozen=True)
 class SharedConfig:
-    address: str
+    hostname: str
     port: int
     ssl_version: int
     certfile: str
@@ -23,3 +22,10 @@ class ServerConfig:
 @dataclasses.dataclass(frozen=True)
 class ClientConfig:
     shared: SharedConfig
+    socket_filepath: str
+    username: str
+    password: str
+
+     # set to None for all RPCs
+     # or specify the explicit list of RPCs that this client can call
+    rpcs: Optional[Sequence[int]] = None

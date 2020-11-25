@@ -3,12 +3,13 @@
 To run:
 1. Go to the parent directory
 2. In a terminal, run `python3 -m examples.server`
-3. In another terminal, run `python3 -m examples.client`
-The client should print out something like
+3. In another terminal, run `./examples/client.sh`
+4. In a third terminal, run `python3 -m examples.consumer --connection_point=./srpc.sock`
+The consumer should print out something like
 ```
 RPC 1 response
-Message(rpc_id=1, request_id=0, data=b'hello, world 0')
+b'hello, world 1'
 RPC 2 response
-Message(rpc_id=1, request_id=1, data=b'hello, world 1')
+b'hello, world 2'
 ```
 Then exit

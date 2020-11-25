@@ -13,8 +13,9 @@ class Message(NamedTuple):
     data: bytes
 
 Q_SIZE = struct.calcsize("Q")
+BITS_PER_BYTE = 8
 Q_MIN = 0
-Q_MAX = 2 ** (Q_SIZE * 8) - 1
+Q_MAX = 2 ** (Q_SIZE * BITS_PER_BYTE) - 1
 
 def encode_message(message: Message) -> bytes:
     rpc_id = message.rpc_id
