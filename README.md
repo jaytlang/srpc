@@ -1,3 +1,8 @@
-# sRPC
+========================
+sRPC - electric boogaloo
+========================
 
-Under development. See `examples\` for a working demo.
+Work in progress. See examples/ for
+a client REPL and a server application
+leveraging listen/announce. Source is
+heavily annotated.
