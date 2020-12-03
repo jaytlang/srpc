@@ -115,6 +115,7 @@ async def dispatch9(msg: Message, rpcroot: str) -> Message:
         print("9: write")
         wrreq9 = AppendRequest(**data_json)
         count : int = await write_fid(wrreq9.fid, wrreq9.cnt, wrreq9.data)
+        if count < 0: return encode_error(msg, count)
 
         wrresp : str = json.dumps(AppendResponse(count)._asdict())
         wrresp_bytes : bytes = wrresp.encode('utf-8')

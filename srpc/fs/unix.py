@@ -11,13 +11,13 @@ import stat
 import os
 
 async def write_pipe(path: str, data: str) -> int:
+    done : bool = False
     try:
         if not stat.S_ISFIFO(os.stat(path).st_mode): return Error.EBADPATH.value
 
-        done : bool = False
         # This is going to break because the pipe isn't
         # seekable. After the write succeeds, gtfo accordingly
-        async with aiofile.async_open(path, 'a') as f:
+        async with aiofile.async_open(path, 'w+') as f:
             await f.write(data + "\n")
             done = True
     except: 
