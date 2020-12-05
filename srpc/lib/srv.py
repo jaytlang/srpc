@@ -3,6 +3,7 @@
 from typing import Dict
 import os
 import ssl
+import shutil
 from srpc.srv.srv import RPCServer
 from srpc.srv.dat import Con, Message, SSLContextBuilder
 
@@ -19,6 +20,7 @@ async def announce(hostname: str, port: int, rpcroot: str) -> str:
     global ctls
     global context
 
+
     newcon : Con = Con(hostname, port, context)
     if rpcroot in ctls.keys(): return "ERROR: dir already announced"
     ctls[rpcroot] = newcon
@@ -27,8 +29,9 @@ async def announce(hostname: str, port: int, rpcroot: str) -> str:
     try: os.mkdir("/srv")
     except FileExistsError: pass
     
-    try: os.mkdir("/srv/ctl/")
-    except FileExistsError: pass
+    shutil.rmtree("/srv/ctl", ignore_errors=True)
+    os.mkdir("/srv/ctl/")
+    os.chmod("/srv/ctl/", 0o777)
 
     # All good. ctl/ gets populated when
     # new connections pop open - for now,

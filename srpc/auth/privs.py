@@ -2,9 +2,6 @@
 
 from srpc.auth.dat import *
 import pathlib
-import pwd
-import grp
-import os
 
 dropped : bool = False
 
@@ -24,23 +21,4 @@ def validate_token(afid: int, uname: str, aname: str) -> bool:
     print("Auth: path works out")
 
     return True
-
-# Have we descended to an unprivileged user yet?
-def did_drop_privs() -> bool: return dropped
-
-# Set our UID/GID to a different user, thus picking
-# up SELinux policy associated with that user.
-# dropped MUST be false in order to run this.
-def drop_privileges(uname: str) -> None:
-    global dropped
-
-    newuid : int = pwd.getpwnam(uname)[2]
-    newgid : int = grp.getgrnam(uname)[2]
-    os.setgid(newgid)
-    os.setuid(newuid)
-
-    # We are the new user now - set some things up
-    dropped = True
-    print(f"9auth: successfully dropped privs on attach, root -> {uname}")
-
 

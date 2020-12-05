@@ -28,4 +28,6 @@ class AFidData(NamedTuple):
 
 AFidTable: Dict[int, AFidData] = {}
 AFidValidity: Dict[int, bool] = {}
+
+# Mapping of users to ctls
 Relays: Dict[str, int] = {}

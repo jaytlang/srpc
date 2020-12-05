@@ -4,6 +4,7 @@ import os
 import asyncio
 import socket
 import aiofile
+from multiprocessing import Manager
 
 from srpc.nine.dat import Error, RespId, ErrorResponse
 from srpc.fs.dat import FidData
@@ -42,14 +43,22 @@ class RPCServer:
             writer: asyncio.StreamWriter
             ) -> None:
     
-        # Each new connection gets a new set of data structures...
-        # Three cheers to python hopefully being pass by ref
-        myfidtable : Dict[int, FidData] = {}
         print(f"9srv: client connected for {self.rpcroot}")
+        # Each new connection gets a new set of data structures...
+        # Three cheers to python being pass by reference.
+
+        # Additionally, wrap the dict so it's accessible across
+        # processes. This way, for this connection, everyone holds
+        # onto an up to date set of fids. Might not be totally
+        # needed, but it's nice and comfy.
+        mpmanager = Manager()
+        myfidtable : Dict[int, FidData] = mpmanager.dict()
+
+        # Do the thing
         while True:
             try: request : Message = await decode_message(reader)
             except asyncio.IncompleteReadError: return
-            response : Message = await dispatch9(request, self.rpcroot, myfidtable)
+            response : Message = await dispatch9(request, self.rpcroot, myfidtable, False)
             
             writer.write(encode_message(response))
             await writer.drain()
