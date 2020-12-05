@@ -97,7 +97,14 @@ def clone(fsroot: str, uname: str) -> str:
 
     # Manually register the root directory
     # since os.walk won't cover it
-    # The context of this dir doesn't matter.
+    # Register this with the original fsroot perms.
+    shutil.copystat(fsroot, cloneroot)
+    shutil.chown(
+            cloneroot,
+            user=pwd.getpwuid(os.stat(fsroot).st_uid).pw_name,
+            group=grp.getgrgid(os.stat(fsroot).st_gid).gr_name
+            )
+
     register_qid(cloneroot[:-1], True, isroot = True)
     print("Registered", cloneroot[:-1])
 
@@ -128,7 +135,9 @@ def stat_qid(qid: int) -> Stat:
     userpath: str = data.fname.replace(fsroot.fname, "/")
 
     children: List[str] = []
-    if data.isdir: children = [f for f in os.listdir(data.fname)]
+    try:
+        if data.isdir: children = [f for f in os.listdir(data.fname)]
+    except: return Stat(Error.EOPENRDF.value, "", False, children)
 
     return Stat(qid, userpath, data.isdir, children) 
 
