@@ -6,9 +6,11 @@ import socket
 import aiofile
 
 from srpc.nine.dat import Error, RespId, ErrorResponse
+from srpc.fs.dat import FidData
 from srpc.nine.dispatch import dispatch9
 from srpc.srv.msg import Message
 from srpc.srv.msg import encode_message, decode_message
+from typing import Dict
 
 class RPCServer:
     
@@ -40,11 +42,14 @@ class RPCServer:
             writer: asyncio.StreamWriter
             ) -> None:
     
+        # Each new connection gets a new set of data structures...
+        # Three cheers to python hopefully being pass by ref
+        myfidtable : Dict[int, FidData] = {}
         print(f"9srv: client connected for {self.rpcroot}")
         while True:
             try: request : Message = await decode_message(reader)
             except asyncio.IncompleteReadError: return
-            response : Message = await dispatch9(request, self.rpcroot)
+            response : Message = await dispatch9(request, self.rpcroot, myfidtable)
             
             writer.write(encode_message(response))
             await writer.drain()

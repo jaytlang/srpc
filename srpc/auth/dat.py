@@ -28,3 +28,4 @@ class AFidData(NamedTuple):
 
 AFidTable: Dict[int, AFidData] = {}
 AFidValidity: Dict[int, bool] = {}
+Relays: Dict[str, int] = {}

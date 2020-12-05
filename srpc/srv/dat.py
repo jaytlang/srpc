@@ -6,7 +6,7 @@ import ssl
 import struct
 import asyncio
 import enum
-from typing import NamedTuple
+from typing import NamedTuple, Dict
 
 # Message format:
 # 32 bits - RPC ID
@@ -21,8 +21,8 @@ class Message(NamedTuple):
 class Con(NamedTuple):
     hostname: str
     port: int
-    ctl: int
     ssl: ssl.SSLContext
+
 
 # SSL context helpers
 # Again, largely taken from the original sRPC repo

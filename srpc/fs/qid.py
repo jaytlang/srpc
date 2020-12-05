@@ -19,6 +19,7 @@ concount: int = 1
 
 # Initialization: clone the template filesystem
 # into a new tree of named pipes for a given user
+# This does NOT handle the ctl file
 def clone(fsroot: str, uname: str) -> str:
     global concount
     # Recurse through the filesystem on disk and

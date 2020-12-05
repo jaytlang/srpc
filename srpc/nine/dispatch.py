@@ -6,16 +6,17 @@
 
 import json
 import shutil
-from typing import Set, NamedTuple
+from typing import Set, NamedTuple, Dict
 from srpc.fs.dat import Stat
 from srpc.fs.fid import *
 from srpc.fs.qid import clone
 from srpc.auth.afid import *
+from srpc.auth.dat import Relays
 from srpc.nine.dat import *
 from srpc.auth.privs import validate_token, did_drop_privs, drop_privileges
 from srpc.srv.dat import Message
 
-async def dispatch9(msg: Message, rpcroot: str) -> Message:
+async def dispatch9(msg: Message, rpcroot: str, fidtable: Dict[int, FidData]) -> Message:
     # Check if the RPC is a valid one  
     valid_requests : Set[int] = set(i.value for i in ReqId)
     if msg.rpc not in valid_requests: return encode_error(msg, Error.EFAKERPC.value)
@@ -50,7 +51,7 @@ async def dispatch9(msg: Message, rpcroot: str) -> Message:
         # to make the insertion they are making.
         cloneroot : str = clone(rpcroot + "/" + attreq9.aname, attreq9.uname)
         print("Made clone dir") 
-        attqid : int = mk_attach_fid(attreq9.fid, attreq9.uname, cloneroot + "/" + attreq9.aname)
+        attqid : int = mk_attach_fid(attreq9.fid, attreq9.uname, cloneroot + "/" + attreq9.aname, fidtable)
         if attqid < 0:
             shutil.rmtree(cloneroot)
             return encode_error(msg, attqid)
@@ -62,7 +63,7 @@ async def dispatch9(msg: Message, rpcroot: str) -> Message:
         # Actually do authentication
         if not validate_token(attreq9.afid, attreq9.uname, attreq9.aname):
             shutil.rmtree(cloneroot)
-            clunk_fid(attreq9.fid)
+            clunk_fid(attreq9.fid, fidtable)
             return encode_error(msg, Error.EAUTHENT.value)
         print("Tok validated")
 
@@ -81,7 +82,7 @@ async def dispatch9(msg: Message, rpcroot: str) -> Message:
     elif(msg.rpc == ReqId.WALK.value):
         print("9: walk")
         walkreq9 = WalkRequest(**data_json)  
-        walkqid : int = mk_walk_fid(walkreq9.newfid, walkreq9.fid, walkreq9.path)
+        walkqid : int = mk_walk_fid(walkreq9.newfid, walkreq9.fid, walkreq9.path, fidtable)
         if walkqid < 0: return encode_error(msg, walkqid)
 
         walkresp : str = json.dumps(WalkResponse(walkqid)._asdict())
@@ -91,7 +92,7 @@ async def dispatch9(msg: Message, rpcroot: str) -> Message:
     elif(msg.rpc == ReqId.STAT.value):
         print("9: stat")
         statreq9 = StatRequest(**data_json)
-        stat : Stat = stat_fid(statreq9.fid)
+        stat : Stat = stat_fid(statreq9.fid, fidtable)
         if stat.qid < 0: return encode_error(msg, stat.qid)
 
         statresp : str = json.dumps(StatResponse(stat.qid, stat.fname, stat.isdir, stat.children)._asdict())
@@ -101,7 +102,7 @@ async def dispatch9(msg: Message, rpcroot: str) -> Message:
     elif(msg.rpc == ReqId.APPEND.value):
         print("9: append")
         apreq9 = AppendRequest(**data_json)
-        data : Tuple[str, int] = await write_fid(apreq9.fid, len(apreq9.data), apreq9.data)
+        data : Tuple[str, int] = await write_fid(apreq9.fid, len(apreq9.data), apreq9.data, fidtable)
         if data[1] < 0: return encode_error(msg, data[1])
 
         wrresp : str = json.dumps(AppendResponse(data[0])._asdict())
@@ -111,7 +112,7 @@ async def dispatch9(msg: Message, rpcroot: str) -> Message:
     else:
         print("9: clunk")
         clunkreq9 = ClunkRequest(**data_json)
-        clunk_fid(clunkreq9.fid)
+        clunk_fid(clunkreq9.fid, fidtable)
         clunkresp_bytes : bytes = "".encode('utf-8')
         return Message(RespId.CLUNKR.value, msg.tag, clunkresp_bytes)
         

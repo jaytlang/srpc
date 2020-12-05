@@ -8,7 +8,6 @@ from srpc.srv.dat import Con, Message, SSLContextBuilder
 
 context : ssl.SSLContext = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
 ctls : Dict[str, Con] = {}
-ctlcount : int = 0
 
 # Configure the ssl context automatically, for ease of use
 async def ssl_context_helper(certfile: str, keyfile: str) -> int:
@@ -18,13 +17,11 @@ async def ssl_context_helper(certfile: str, keyfile: str) -> int:
 
 async def announce(hostname: str, port: int, rpcroot: str) -> str:
     global ctls
-    global ctlcount
     global context
 
-    newcon : Con = Con(hostname, port, ctlcount, context)
+    newcon : Con = Con(hostname, port, context)
     if rpcroot in ctls.keys(): return "ERROR: dir already announced"
     ctls[rpcroot] = newcon
-    ctlcount += 1
     
     # Make necessary control structures
     try: os.mkdir("/srv")
@@ -32,24 +29,18 @@ async def announce(hostname: str, port: int, rpcroot: str) -> str:
     
     try: os.mkdir("/srv/ctl/")
     except FileExistsError: pass
-    
-    ctlpath: str = f"/srv/ctl/{ctlcount - 1}"
-    try: os.mkdir(ctlpath)
-    except FileExistsError: pass
-    
-    try: os.unlink(ctlpath + "/send")
-    except FileNotFoundError: pass
-    try: os.unlink(ctlpath + "/recv")
-    except FileNotFoundError: pass
-    
-    os.mkfifo(ctlpath + "/send")
-    os.mkfifo(ctlpath + "/recv")
-    return ctlpath
+
+    # All good. ctl/ gets populated when
+    # new connections pop open - for now,
+    # per unix user for simplicity. This is
+    # an effective simplifying assumption,
+    # but one that deviates from the 9P
+    # approach where ctls dictate the flow
+    # of the connection etc.
+    return rpcroot
 
 async def listen(rpcroot: str) -> str:
     global ctls
-    global ctlcount
-    global context
 
     try: thiscon : Con = ctls[rpcroot]
     except KeyError: return "ERROR: dir not announced"

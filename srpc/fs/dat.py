@@ -43,6 +43,5 @@ class QidData(NamedTuple):
 
 ROOT_QID = 0
 
-# Shared datastructures
-FidTable: Dict[int, FidData] = {}
+# Shared datastructure: the QID table
 QidTable: Dict[int, QidData] = {}
