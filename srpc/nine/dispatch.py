@@ -94,30 +94,17 @@ async def dispatch9(msg: Message, rpcroot: str) -> Message:
         stat : Stat = stat_fid(statreq9.fid)
         if stat.qid < 0: return encode_error(msg, stat.qid)
 
-        statresp : str = json.dumps(StatResponse(stat.qid, stat.fname, stat.isdir)._asdict())
+        statresp : str = json.dumps(StatResponse(stat.qid, stat.fname, stat.isdir, stat.children)._asdict())
         statresp_bytes: bytes = statresp.encode('utf-8')
         return Message(RespId.STATR.value, msg.tag, statresp_bytes)
 
-    elif(msg.rpc == ReqId.READ.value):
-        print("9: read")
-        readreq9 = ReadRequest(**data_json)
-
-        data : str
-        status : int
-        data, status = await read_fid(readreq9.fid, readreq9.cnt)
-        if status < 0: return encode_error(msg, status)
-
-        readresp : str = json.dumps(ReadResponse(len(data), data)._asdict())
-        readresp_bytes: bytes = readresp.encode('utf-8')
-        return Message(RespId.READR.value, msg.tag, readresp_bytes)
-
     elif(msg.rpc == ReqId.APPEND.value):
-        print("9: write")
-        wrreq9 = AppendRequest(**data_json)
-        count : int = await write_fid(wrreq9.fid, wrreq9.cnt, wrreq9.data)
-        if count < 0: return encode_error(msg, count)
+        print("9: append")
+        apreq9 = AppendRequest(**data_json)
+        data : Tuple[str, int] = await write_fid(apreq9.fid, len(apreq9.data), apreq9.data)
+        if data[1] < 0: return encode_error(msg, data[1])
 
-        wrresp : str = json.dumps(AppendResponse(count)._asdict())
+        wrresp : str = json.dumps(AppendResponse(data[0])._asdict())
         wrresp_bytes : bytes = wrresp.encode('utf-8')
         return Message(RespId.APPENDR.value, msg.tag, wrresp_bytes)
 

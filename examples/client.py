@@ -54,26 +54,14 @@ def parse9(intxt: str) -> Message:
         statreq_bytes : bytes = json.dumps(statreq._asdict()).encode('utf-8')
         return Message(ReqId.STAT.value, random.randrange(1, 5000), statreq_bytes)
 
-    elif cmd == "read":
+    elif cmd == "append":
         if(len(splitinput) != 3): raise ValueError
         try:
-            readfid : int = int(splitinput[1])
-            cnt : int = int(splitinput[2])
-        except: raise ValueError
-
-        readreq = ReadRequest(readfid, cnt)
-        print(f"\t> {readreq}")
-        readreq_bytes : bytes = json.dumps(readreq._asdict()).encode('utf-8')
-        return Message(ReqId.READ.value, random.randrange(1, 5000), readreq_bytes)
-    
-    elif cmd == "append":
-        if(len(splitinput) != 4): raise ValueError
-        try:
             wrfid : int = int(splitinput[1])
-            acnt : int = int(splitinput[2])
+            data : str = splitinput[2]
         except: raise ValueError
 
-        writereq = AppendRequest(wrfid, acnt, splitinput[3])
+        writereq = AppendRequest(wrfid, data)
         print(f"\t> {writereq}")
         writereq_bytes : bytes = json.dumps(writereq._asdict()).encode('utf-8')
         return Message(ReqId.APPEND.value, random.randrange(1, 5000), writereq_bytes)
@@ -95,9 +83,6 @@ def parse9(intxt: str) -> Message:
 async def main() -> None:
     srv_address = "localhost"
     srv_port = 42069
-    # ...as some fixed user, which
-    # we will prompt for over the CLI.
-    username = "jaytlang"
     
     ## End edits ##
     cert : str = "srpc.crt"

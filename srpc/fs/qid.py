@@ -60,35 +60,34 @@ def clone(fsroot: str, uname: str) -> str:
                     group=grp.getgrgid(os.stat(fpath).st_gid).gr_name
                     )
 
-            print("Registered", clonepath)
+            print("Registered directory", clonepath)
 
         # If we've got a file, make a send/recv pair
         # - mkdir
         # - mkfifo x 2
-        # - copystat x 3
+        # - copystat x 2
+        # - chmod x 1 -- need to create a generic directory
         # - chown x 3
         else:
             os.mkdir(clonepath)
-            shutil.copystat(fpath, clonepath)
+            os.chmod(clonepath, 0o755)
             shutil.chown(
                     clonepath,
                     user=pwd.getpwuid(os.stat(fpath).st_uid).pw_name,
                     group=grp.getgrgid(os.stat(fpath).st_gid).gr_name
                     )
             register_qid(clonepath, False)
-            print("Registered", clonepath)
+            print("Registered pre-file", clonepath)
 
             os.mkfifo(clonepath + "/recv")
             os.mkfifo(clonepath + "/send")
 
-            shutil.copystat(fpath, clonepath + "/recv")
             shutil.chown(
                     clonepath + "/recv",
                     user=pwd.getpwuid(os.stat(fpath).st_uid).pw_name,
                     group=grp.getgrgid(os.stat(fpath).st_gid).gr_name
                     )
             
-            shutil.copystat(fpath, clonepath + "/send")
             shutil.chown(
                     clonepath + "/send",
                     user=pwd.getpwuid(os.stat(fpath).st_uid).pw_name,
@@ -127,27 +126,24 @@ def stat_qid(qid: int) -> Stat:
     fsroot: QidData = QidTable[ROOT_QID]
     userpath: str = data.fname.replace(fsroot.fname, "/")
 
-    return Stat(qid, userpath, data.isdir) 
+    children: List[str] = []
+    if data.isdir: children = [f for f in os.listdir(data.fname)]
 
-async def write_qid(qid: int, data: str) -> int:
+    return Stat(qid, userpath, data.isdir, children) 
+
+async def write_qid(qid: int, data: str) -> Tuple[str, int]:
     qidinfo: QidData = QidTable[qid]
     qiddir: str = qidinfo.fname
 
-    if qidinfo.isdir: return Error.EOPENWRF.value
+    if qidinfo.isdir: return "", Error.EOPENWRF.value
 
     qid_server_recv = qiddir + "/recv"
-    return await write_pipe(qid_server_recv, data)
+    unix_wrres = await write_pipe(qid_server_recv, data)
+    if unix_wrres < 0:
+        return "", unix_wrres
 
-async def read_qid(qid: int, count: int) -> Tuple[str, int]:
-    data: QidData = QidTable[qid]
-    qiddir: str = data.fname
-
-    # Bro who even needs to be fast lmao this is discovery
-    if data.isdir:
-        files : List[str] = [f for f in os.listdir(qiddir)]
-        res : str = str(files)
-        if len(res) >= count: return str(files)[:count], count
-        else: return res, len(res)
-
+    # Reading a directory has (sadly) been relegated
+    # to stat. Doing the thing.
     qid_server_send = qiddir + "/send"
-    return await read_pipe(qid_server_send, count)
+    return await read_pipe(qid_server_send)
+

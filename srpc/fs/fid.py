@@ -3,8 +3,8 @@
 import pathlib
 from typing import Tuple
 from srpc.fs.dat import FidData, FidTable, QidTable, Stat
-from srpc.fs.qid import qid_for_aname, stat_qid, read_qid, write_qid
-from srpc.auth.afid import write_afid, read_afid, clunk_afid
+from srpc.fs.qid import qid_for_aname, stat_qid, write_qid
+from srpc.auth.afid import write_afid, clunk_afid
 from srpc.nine.dat import Error
 
 def sanitize_path(rpath: str) -> str:
@@ -47,19 +47,10 @@ def mk_walk_fid(fidno: int, parentfid: int, relpath: str) -> int:
 def stat_fid(fidno: int) -> Stat:
     try: 
         qid: int = FidTable[fidno].qid
-    except KeyError: return Stat(Error.ENOSCHFD.value, "dontcare", False)
+    except KeyError: return Stat(Error.ENOSCHFD.value, "dontcare", False, [])
     return stat_qid(qid)
 
-async def read_fid(fidno: int, count: int) -> Tuple[str, int]:
-    try: 
-        qid: int = FidTable[fidno].qid
-    except KeyError: 
-        # Try the AFid table as well
-        return read_afid(fidno, count)
-
-    return await read_qid(FidTable[fidno].qid, count)
-
-async def write_fid(fidno: int, count: int, data: str) -> int:
+async def write_fid(fidno: int, count: int, data: str) -> Tuple[str, int]:
     try: 
         qid: int = FidTable[fidno].qid
     except KeyError: 

@@ -10,6 +10,10 @@ heavily annotated.
 This is the multiuser tree. I'm attempting
 to do the following here, in order:
 
+-> Change the append request so that it does what
+   we want, removing read in the process. Keep everything
+   at the pipe layer intact.
+
 -> Separate this subsystem into two executables,
    one for the main server itself (which handles
    auth and attach 9P requests) and a new lazily

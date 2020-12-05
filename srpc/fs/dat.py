@@ -25,6 +25,7 @@ class Stat(NamedTuple):
     qid: int
     fname: str  # Relative with respect to the fsroot
     isdir: bool
+    children: List[str]
 
 # Elements of the FID<->QID mapping
 class FidData(NamedTuple):

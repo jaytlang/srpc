@@ -45,11 +45,11 @@ def mk_auth_afid(fidno: int, uname: str, aname: str) -> int:
     AFidValidity[fidno] = False
     return fidno
     
-# These are simple, synchronous operations...
-def write_afid(fidno: int, count: int, data: str) -> int:
+# These are all simple, synchronous operations...write included
+def write_afid(fidno: int, count: int, data: str) -> Tuple[str, int]:
     try:
         afidinfo: AFidData = AFidTable[fidno]
-    except KeyError: return Error.ENOSCHFD.value
+    except KeyError: return "", Error.ENOSCHFD.value
 
     # For now, we're making this simple: the password
     # is written to the clientmsg side of the afid.
@@ -62,13 +62,5 @@ def write_afid(fidno: int, count: int, data: str) -> int:
     if authenticate(AFidTable[fidno].uname, data):
         AFidValidity[fidno] = True
 
-    return actualcount
-
-def read_afid(fidno: int, count: int) -> Tuple[str, int]:
-    try:
-        afidinfo: AFidData = AFidTable[fidno]
-    except KeyError: return "", Error.ENOSCHFD.value
-
     if AFidValidity[fidno]: return "1", 0
-    return "0", 0
-
+    else: return "0", 0

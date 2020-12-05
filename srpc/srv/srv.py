@@ -52,11 +52,14 @@ class RPCServer:
     
     # The meat of listen(), which is modified somewhat from the 9 API
     async def dolisten(self, rpcroot: str) -> str:
+        print("9: preparing to start server...")
         server : asyncio.AbstractServer = await asyncio.start_server(
            self.callback9,
            self.hostname,
            self.port,
            ssl=self.ssl
         )
+        print("9: server created")
         await server.start_serving()
+        print("9: server listening")
         return rpcroot

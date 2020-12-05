@@ -42,16 +42,15 @@
 # point to a given qid. 
 
 from enum import Enum
-from typing import NamedTuple
+from typing import NamedTuple, List
 
 class ReqId(Enum):
     AUTH = 1        # AUTH tag (afid uname aname)
     ATTACH = 3      # ATTACH tag (afid fid uname aname)
     WALK = 5        # WALK tag (fid newfid path)
     STAT = 7        # STAT tag (fid)
-    READ = 9        # READ tag (fid cnt)
-    APPEND = 11     # APPEND tag (fid cnt data...)
-    CLUNK = 13      # CLUNK tag (fid)
+    APPEND = 9      # APPEND tag (fid data...)
+    CLUNK = 11      # CLUNK tag (fid)
 
 # RPC type on the receiver side:
 class RespId(Enum):
@@ -59,9 +58,8 @@ class RespId(Enum):
     ATTACHR = 4     # ATTACHR tag (qid)
     WALKR = 6       # WALKR tag (qid)
     STATR = 8       # STATR tag (Stat)
-    READR = 10      # READR tag (cnt data...)
-    APPENDR = 12    # APPENDR tag (cnt)
-    CLUNKR = 14     # CLUNKR tag
+    APPENDR = 10    # APPENDR tag (data...)
+    CLUNKR = 12     # CLUNKR tag
     ERROR = 99      # ERROR tag Error
 
 # Error messages -- work in progress
@@ -114,22 +112,14 @@ class StatResponse(NamedTuple):
     qid: int
     fname: str
     isdir: bool
-
-class ReadRequest(NamedTuple):
-    fid: int
-    cnt: int
-
-class ReadResponse(NamedTuple):
-    cnt: int
-    data: str
+    children: List[str]
 
 class AppendRequest(NamedTuple):
     fid: int
-    cnt: int
     data: str
 
 class AppendResponse(NamedTuple):
-    cnt: int
+    data: str
 
 class ClunkRequest(NamedTuple):
     fid: int
