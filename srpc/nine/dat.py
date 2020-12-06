@@ -44,23 +44,20 @@
 from enum import Enum
 from typing import NamedTuple, List
 
-class ReqId(Enum):
+class MessageType(Enum):
+    ERROR = -1      # ERROR tag Error
     AUTH = 1        # AUTH tag (afid uname aname)
-    ATTACH = 3      # ATTACH tag (afid fid uname aname)
-    WALK = 5        # WALK tag (fid newfid path)
-    STAT = 7        # STAT tag (fid)
-    APPEND = 9      # APPEND tag (fid data...)
-    CLUNK = 11      # CLUNK tag (fid)
-
-# RPC type on the receiver side:
-class RespId(Enum):
     AUTHR = 2       # AUTHR tag (aqid)
+    ATTACH = 3      # ATTACH tag (afid fid uname aname)
     ATTACHR = 4     # ATTACHR tag (qid)
+    WALK = 5        # WALK tag (fid newfid path)
     WALKR = 6       # WALKR tag (qid)
+    STAT = 7        # STAT tag (fid)
     STATR = 8       # STATR tag (Stat)
+    APPEND = 9      # APPEND tag (fid data...)
     APPENDR = 10    # APPENDR tag (data...)
+    CLUNK = 11      # CLUNK tag (fid)
     CLUNKR = 12     # CLUNKR tag
-    ERROR = 99      # ERROR tag Error
 
 # Error messages -- work in progress
 class Error(Enum):
@@ -124,5 +121,13 @@ class AppendResponse(NamedTuple):
 class ClunkRequest(NamedTuple):
     fid: int
 
+class ClunkResponse(NamedTuple):
+    pass
+
 class ErrorResponse(NamedTuple):
     errno: int
+
+class RPCException(Exception):
+    def __init__(self, errno: int):
+        self.errno = Error(errno)
+        super().__init__()

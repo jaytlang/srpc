@@ -6,7 +6,7 @@ from typing import Dict
 from srpc.fs.dat import FidData
 from srpc.fs.qid import Qid
 from srpc.nine.dispatch import dispatch9
-from srpc.srv.msg import encode_message, decode_message
+from srpc.srv.dat import encode_message, decode_message
 
 class RPCServer:
     """

@@ -1,79 +1,81 @@
 import asyncio
-import random
 import json
-import ssl
 
-from srpc.nine.dat import AuthRequest, AttachRequest, ReqId, WalkRequest, \
-    StatRequest, AppendRequest,RespId, ClunkRequest
+from srpc.nine.dat import AuthRequest, AttachRequest, MessageType, WalkRequest, \
+    StatRequest, AppendRequest, ClunkRequest
 
-from srpc.srv.msg import encode_message, decode_message, Message
+from srpc.srv.dat import encode_message, decode_message, Message, SSLContextBuilder
 
-def parse9(intxt: str) -> Message:
-    splitinput = intxt.split()
-    cmd = splitinput[0]
-    if cmd == "auth":
-        if len(splitinput) != 4:
-            raise ValueError("command must have 4 parts")
-        authafid = int(splitinput[1])
-        authreq = AuthRequest(authafid, splitinput[2], splitinput[3])
-        print(f"\t> {authreq}")
-        authreq_bytes: bytes = json.dumps(authreq._asdict()).encode('utf-8')
-        return Message(ReqId.AUTH.value, random.randrange(1, 5000), authreq_bytes)
+class Client:
+    def __init__(self) -> None:
+        self._tag = 0
 
-    if cmd == "attach":
-        if len(splitinput) != 5:
-            raise ValueError("command must have 5 parts")
-        attafid = int(splitinput[1])
-        attfid = int(splitinput[2])
+    def parse9(self, intxt: str) -> Message:
+        splitinput = intxt.split()
+        cmd = splitinput[0]
+        if cmd == "auth":
+            authafid = int(splitinput[1])
+            uname = splitinput[2]
+            aname = splitinput[3]
+            authreq = AuthRequest(authafid, uname, aname)
+            print(f"\t> {authreq}")
+            authreq_bytes: bytes = json.dumps(authreq._asdict()).encode('utf-8')
+            tag = self._tag
+            self._tag += 1
+            return Message(MessageType.AUTH, tag, authreq_bytes)
 
-        attreq = AttachRequest(attafid, attfid, splitinput[3], splitinput[4])
-        print(f"\t> {attreq}")
-        attreq_bytes = json.dumps(attreq._asdict()).encode('utf-8')
-        return Message(ReqId.ATTACH.value, random.randrange(1, 5000), attreq_bytes)
+        if cmd == "attach":
+            attafid = int(splitinput[1])
+            attfid = int(splitinput[2])
+            uname = splitinput[3]
+            aname = splitinput[4]
+            attreq = AttachRequest(attafid, attfid, uname, aname)
+            print(f"\t> {attreq}")
+            attreq_bytes = json.dumps(attreq._asdict()).encode('utf-8')
+            tag = self._tag
+            self._tag += 1
+            return Message(MessageType.ATTACH, tag, attreq_bytes)
 
-    if cmd == "walk":
-        if len(splitinput) != 4:
-            raise ValueError()
-        walkfid = int(splitinput[1])
-        walknfid = int(splitinput[2])
+        if cmd == "walk":
+            walkfid = int(splitinput[1])
+            walknfid = int(splitinput[2])
+            path = splitinput[3]
+            walkreq = WalkRequest(walkfid, walknfid, path)
+            print(f"\t> {walkreq}")
+            walkreq_bytes = json.dumps(walkreq._asdict()).encode('utf-8')
+            tag = self._tag
+            self._tag += 1
+            return Message(MessageType.WALK, tag, walkreq_bytes)
 
-        walkreq = WalkRequest(walkfid, walknfid, splitinput[3])
-        print(f"\t> {walkreq}")
-        walkreq_bytes = json.dumps(walkreq._asdict()).encode('utf-8')
-        return Message(ReqId.WALK.value, random.randrange(1, 5000), walkreq_bytes)
+        if cmd == "stat":
+            statfid = int(splitinput[1])
+            statreq = StatRequest(statfid)
+            print(f"\t> {statreq}")
+            statreq_bytes = json.dumps(statreq._asdict()).encode('utf-8')
+            tag = self._tag
+            self._tag += 1
+            return Message(MessageType.STAT, tag, statreq_bytes)
 
-    if cmd == "stat":
-        if len(splitinput) != 2:
-            raise ValueError()
-        statfid = int(splitinput[1])
+        if cmd == "append":
+            wrfid = int(splitinput[1])
+            data = splitinput[2]
+            writereq = AppendRequest(wrfid, data)
+            print(f"\t> {writereq}")
+            writereq_bytes = json.dumps(writereq._asdict()).encode('utf-8')
+            tag = self._tag
+            self._tag += 1
+            return Message(MessageType.APPEND, tag, writereq_bytes)
 
-        statreq = StatRequest(statfid)
-        print(f"\t> {statreq}")
-        statreq_bytes = json.dumps(statreq._asdict()).encode('utf-8')
-        return Message(ReqId.STAT.value, random.randrange(1, 5000), statreq_bytes)
+        if cmd == "clunk":
+            clfid = int(splitinput[1])
+            clunkreq = ClunkRequest(clfid)
+            print(f"\t> {clunkreq}")
+            clunkreq_bytes = json.dumps(clunkreq._asdict()).encode('utf-8')
+            tag = self._tag
+            self._tag += 1
+            return Message(MessageType.CLUNK, tag, clunkreq_bytes)
 
-    if cmd == "append":
-        if len(splitinput) != 3:
-            raise ValueError()
-        wrfid = int(splitinput[1])
-        data = splitinput[2]
-
-        writereq = AppendRequest(wrfid, data)
-        print(f"\t> {writereq}")
-        writereq_bytes = json.dumps(writereq._asdict()).encode('utf-8')
-        return Message(ReqId.APPEND.value, random.randrange(1, 5000), writereq_bytes)
-
-    if cmd == "clunk":
-        if len(splitinput) != 2:
-            raise ValueError()
-        clfid = int(splitinput[1])
-
-        clunkreq = ClunkRequest(clfid)
-        print(f"\t> {clunkreq}")
-        clunkreq_bytes = json.dumps(clunkreq._asdict()).encode('utf-8')
-        return Message(ReqId.CLUNK.value, random.randrange(1, 5000), clunkreq_bytes)
-
-    raise ValueError("Invalid command: " + cmd)
+        raise ValueError("Invalid command: " + cmd)
 
 # This is just a test. Connect to some
 # fixed server/port:
@@ -83,9 +85,8 @@ async def main() -> None:
 
     cert = "srpc.crt"
 
-    context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-    context.load_verify_locations(cert)
-    context.verify_mode = ssl.CERT_REQUIRED
+    ssl_context_builder = SSLContextBuilder(cert)
+    context = ssl_context_builder.build_client()
 
     print("Dialing server...")
     reader, writer = await asyncio.open_connection(
@@ -95,18 +96,19 @@ async def main() -> None:
     )
 
     print("Connected. The shell is yours.")
+    client = Client()
 
     while True:
         cmd = input("% ")
         try:
-            msg = parse9(cmd)
+            msg = client.parse9(cmd)
         except ValueError as ex:
             print("Sorry, that's invalid. ", ex)
             continue
         writer.write(encode_message(msg))
         await writer.drain()
-        rmsg : Message = await decode_message(reader)
-        if rmsg.rpc != RespId.CLUNKR.value:
+        rmsg = await decode_message(reader)
+        if rmsg.message_type != MessageType.CLUNKR:
             data_json = json.loads(rmsg.data)
             assert isinstance(data_json, dict)
             print(f"\t< {data_json}")
