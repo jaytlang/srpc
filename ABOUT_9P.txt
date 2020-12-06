@@ -1,0 +1,129 @@
+==========================
+ Some server parlance: 9P
+==========================
+
+The srpc server and client implement a subset of a network protocol called
+9P, developed for the Plan 9 from Bell Labs distributed OS and used in various
+file-centric distributed systems today. Specifically, we employ a subset of
+9P2000, used in the Plan 9 4th edition, 9front, WSL, KVM, etc.
+
+Forgive my domain specific language. It's explained here.
+
+QUICK GLOSSARY
+*	FID: file identifier. client side, maps to a server-side QID.
+*	QID: server-side file identifier. maps to a served file on disk.
+*	AFID: authentication "fid"; acts as a channel through which identity
+		is established and verified. think an authentication token.
+*	AQID: server-side object corresponding to an afid. in plan 9, a file.
+		in srpc, not implemented in favor of a small python class 
+		per afid.
+
+*	AUTH/ATTACH: establish connection
+*	WALK: move around
+*	APPEND: issue rpc
+*	CLUNK: forget a fid
+*	STAT: what is my fid pointing at
+
+*	UNAME: username
+*	ANAME: attach name, or location to attach to
+
+RPCs AS FILES
+In our system, 9P "files" being served over the network correspond to
+RPC endpoints. When the server starts, it copies over a template filesystem,
+preserving extended attributes and DAC permissions, and opens up a two named
+pipes for communication with the application being run. The application can
+utilize these pipes like normal files to talk to the client, reading and
+writing from/to it. The daemon translates these reads and writes into 9P
+RPCs, and fields them over the network to and from the client.
+
+This system is remarkably flexible, and allows us to create an RPC application
+by treating information written to files, or RPC endpoints, as arguments to
+this RPC. In turn, information written back can be construed as the return value.
+Data can also be persisted conventionally through this mechanism, via a more
+traditional stream-like abstraction.
+
+INTERFACE
+9P sends the following messages between client and server. In Plan 9, these
+correspond to entrypoints in the vfs; In our server, these allow a client
+to interact with a heavily file-like namespace of RPCs, governed by
+discretionary and mandatory access controls and typical filesystem
+mechanics. The messages we use are as follows:
+
+*	AUTH: configure a common file to act as an authentication channel
+*	ATTACH: establish a connection to the file tree
+*	WALK: descend the directory hierarchy
+*	APPEND: write to a file, then issue a blocking read
+*	CLUNK: forget about a file (do not remove it)
+*	STAT: inquire file attributes
+
+Specific data structures passed with each message can be found
+in srpc/nine/dat.py. Feel free to reference this file while reading.
+
+
+FIDs and QIDs
+A key part of 9P is the concept of the FID: an identifier on the client side
+which acts like a pointer to a file-like object.
+
+At startup, the SRPC server assigns a set of QIDs to the served file
+hierarchy, including directories, in a one to one fashion. In other words,
+each QID the server tracks maps to exactly one file on disk, and all files
+are mapped to exactly one unique QID.
+
+Through the ATTACH call, a client may designate its own descriptor - an FID -
+to correspond to a file/QID on the server side, thus allowing the client to
+perform operations on the remote filesystem through this FID. The FID is a
+positive integer chosen by the client, tracked per connection- in other words,
+arbitrarily many distinct clients may choose the same FID number and point them
+at various different files. However, the FID is immutable: once assigned, it
+cannot be reassigned to a new QID until it is unmapped through a CLUNK
+operation.
+
+Besides starting a fresh session through ATTACH, the only way to generate
+new FIDs is through the WALK call. WALK allows the client to specify an
+old FID, a new FID to map, and a relative path referenced from the old FID.
+This allows the server to perform implicit session management since
+FIDs have a well defined ancestry: in other words, a client may connect
+as multiple users over the same connection, and so long as a non-colliding
+set of FIDs are used the server always knows which FIDs correspond to which
+user.
+
+Clients may STAT, and APPEND to FIDs much like they would normal files
+using the POSIX API.
+(where APPEND is a write->blocking read issued over the course of one call)
+
+AFIDs
+The AFID is a special FID which behaves differently from normal FIDs, and
+is used as an authentication channel. In 9P, AUTH establishes an AFID<->AQID
+mapping, where the AQID points to a temporary, well protected file on the
+server end, used to allow communication of client credentials through
+APPEND (or in typical 9P, OPEN/READ/WRITE/CLOSE) operations.
+
+The differences between an AFID and a typical FID are as follows:
+
+*	In the current implementation, the AFID set is global, as opposed
+	to per-connection FIDs. All clients should endeavor to pick a unique
+	(64-128 bit) AFID identifier. Note that I would like this to change,
+	and it is a relatively simple change to make this per-connection,
+	but for now simplicity reigns.
+*	In our implementation, the AQID is synthetic; it is not distinctly
+	referenced. Instead, each AFID points to a data structure which
+	tracks the user's credentials, and whether or not is has been
+	successfully authenticated, etc.
+
+Besides these significant distinctions, the AFID is written to and read
+from like a normal file during the authentication. Implementation-specific
+AFID details are listed below:
+
+*	In canonical 9P, the AQID/file is presented to the server application
+	running on top of our daemon, which chooses how to authenticate with
+	the client. While this functionality isn't far off for us, right now
+	the SRPC system takes control of authentication transparently to the
+	server, using PAM. It expects the client to write its UNIX password
+	to its AFID, which is then checked and tabulated.
+*	In addition to its username, and name to attach to (aname), the ATTACH
+	call requires the client to present a valid AFID it has authenticated
+	with. This allows subsequent privilege management to happen.
+
+Note: the inclusion of uname/aname information in attach allows future room
+for unauthenticated base users through a special NOAFID value, and also
+allows future work in allowing more flexible authentication schemes.
