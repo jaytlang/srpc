@@ -130,4 +130,4 @@ class ErrorResponse(NamedTuple):
 class RPCException(Exception):
     def __init__(self, err: Error):
         self.err = Error(err.value)
-        super().__init__()
+        super().__init__(f"RPC Error: {self.err}")

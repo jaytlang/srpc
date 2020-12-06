@@ -27,8 +27,6 @@ async def write_pipe(path: str, data: str) -> None:
         print("i am ded not big surprise")
         raise RPCException(Error.EOPENWRF) from ex
 
-    return len(data)
-
 async def read_pipe(path: str) -> str:
     if not stat.S_ISFIFO(os.stat(path).st_mode):
         raise RPCException(Error.EBADPATH)

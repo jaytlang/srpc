@@ -7,7 +7,7 @@ from types import TracebackType
 from srpc.srv.dat import Message, SSLContextBuilder, encode_message, decode_message
 from srpc.nine.dat import MessageType, AuthRequest, AuthResponse, AttachRequest, AttachResponse, \
     WalkRequest, WalkResponse, StatRequest, StatResponse, AppendRequest, AppendResponse, \
-    ClunkRequest, ClunkResponse, RPCException
+    ClunkRequest, ClunkResponse, RPCException, Error
 
 LOGGER = logging.getLogger(__name__)
 
@@ -69,17 +69,16 @@ class Client:
     ) -> ResponseMessage:
         tag = self._tag
         self._tag += 1
-        # type: ignore[attr-defined]  # excuse: didn't properly specify type
-        request_bytes = json.dumps(request._asdict()).encode('utf-8')
-        message = Message(request_message_type, tag, request_bytes)
-        response = await self._rpc(message)
-        data_json = json.loads(response.data)
+        request_bytes = json.dumps(request._asdict()).encode('utf-8') # type: ignore[attr-defined]
+        request_message = Message(request_message_type, tag, request_bytes)
+        response_message = await self._rpc(request_message)
+        data_json = json.loads(response_message.data)
         # response message types are 1 more than the request type, by convention
-        if message.message_type == MessageType(request_message_type.value + 1):
+        if response_message.message_type == MessageType(request_message_type.value + 1):
             return response_message_cls(**data_json)  # type: ignore
-        if message.message_type == MessageType.ERROR:
-            raise RPCException(data_json['errno'])
-        raise ValueError("Invalid response from the server", data_json)
+        if response_message.message_type == MessageType.ERROR:
+            raise RPCException(Error(data_json['errno']))
+        raise ValueError("Invalid response_message from the server", response_message)
 
     async def auth(self, request: AuthRequest) -> AuthResponse:
         return await self._rpc_wrapper(request, MessageType.AUTH, AuthResponse)
