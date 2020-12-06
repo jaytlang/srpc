@@ -40,7 +40,6 @@ async def dispatch9(msg: Message, rpcroot: str, fidtable: Dict[int, FidData], co
         # You are allowed to derive multiple authentication
         # tokens, but if this process has already dropped privs
         # to a given user this request presently fails. 
-        if did_drop_privs(): return encode_error(msg, Error.EUNIMPLM.value)
         authreq9 = AuthRequest(**data_json)
         aqid : int = mk_auth_afid(authreq9.afid, authreq9.uname, authreq9.aname)
         if aqid < 0: return encode_error(msg, aqid)
@@ -56,7 +55,6 @@ async def dispatch9(msg: Message, rpcroot: str, fidtable: Dict[int, FidData], co
 
         print("9: attach")
         attreq9 = AttachRequest(**data_json)
-        if did_drop_privs(): return encode_error(msg, Error.EUNIMPLM.value)
 
         # Before anything, check to make sure that the user is allowed
         # to make the insertion they are making.
@@ -169,22 +167,17 @@ def encode_error(original_msg: Message, errno: int) -> Message:
 # 9AUTH: PRIVILEGE DROPPING LOGIC #
 # Have we descended to an unprivileged user yet?
 ctlcount : int = 1
-dropped : bool = False
-def did_drop_privs() -> bool:
-    global dropped
-    return dropped
 
 # Actually perform the descent
 def drop_privileges(uname: str, fidtable: Dict[int, FidData], rpcroot: str) -> None:
-    global dropped
     global ctlcount
 
     # We are about to descend to the new user through a fork
     # operation. Once forked, permissions will get lowered
     # and the child will initiate a server to catch further
     # stuff from us.
-    dropped = True
 
+    if uname in Relays.keys(): return None
     Relays[uname] = ctlcount
     ctlcount += 1
 
