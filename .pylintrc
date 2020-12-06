@@ -11,4 +11,4 @@ disable=missing-module-docstring,
     too-many-branches,
     too-many-locals,
     too-many-return-statements
-good-names=f,p,ex
+good-names=f,p,ex,rf,wf

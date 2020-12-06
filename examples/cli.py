@@ -102,9 +102,9 @@ async def main() -> None:
             cmd = input("% ")
             try:
                 await cli.parse9(cmd)
-            except (ValueError, TypeError, RPCException) as ex:
+            except (ValueError, TypeError, RPCException, IndexError) as ex:
                 print(ex)
-                continue            
+                continue
             await asyncio.sleep(0)
 
 if __name__ == "__main__":

@@ -35,7 +35,8 @@ class RPCServer:
     # server-defined authentication.
 
     async def waitfordata(self) -> None:
-        while not self.newdata: await asyncio.sleep(0)
+        while not self.newdata:
+            await asyncio.sleep(0)
 
     async def callback9(
         self,
@@ -62,8 +63,7 @@ class RPCServer:
             except asyncio.IncompleteReadError:
                 return
             response, linedir = await dispatch9(request, self.rpcroot, myfidtable, myqid, False)
-        
-            if response.message_type == MessageType.ATTACHR: 
+            if response.message_type == MessageType.ATTACHR:
                 self.newdata = linedir
 
             writer.write(encode_message(response))
@@ -87,4 +87,3 @@ class RPCServer:
             await self.waitfordata()
             yield self.newdata
             self.newdata = ""
-
