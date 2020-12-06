@@ -1,4 +1,5 @@
 import asyncio
+import aiofiles
 import os
 import sys
 
@@ -9,10 +10,23 @@ async def main() -> None:
     await srv.ssl_context_helper(
         os.path.join(os.path.dirname(__file__), "srpc.crt"),
         os.path.join(os.path.dirname(__file__), "srpc.key"))
-    await srv.announce("localhost", 42069, "/home/notthensa/test")
-    await srv.listen("/home/notthensa/test")
+    await srv.announce("localhost", 42069, "/tmp/echo")
+
+    async for linedir in srv.listen("/tmp/echo"):
+        print(f"New linedir: {linedir}")
+        loop = asyncio.get_event_loop
+        if loop is not None: await echo(linedir)
+
+async def echo(linedir: str) -> None:
+    send = linedir + "/echo/send"
+    recv = linedir + "/echo/recv"
+
     while True:
-        await asyncio.sleep(0)
+        async with aiofiles.open(recv, 'r') as rf:
+            print("Got data out")
+            data = await rf.read()
+            async with aiofiles.open(send, 'w') as wf:
+                await wf.write(data + "\n")
 
 if __name__ == "__main__":
     if os.getuid() != 0:

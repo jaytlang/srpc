@@ -1,6 +1,6 @@
 # High level server API
 
-from typing import Dict
+from typing import Dict, AsyncIterator, Optional
 import os
 import ssl
 import shutil
@@ -37,11 +37,12 @@ class Srv:
         # approach where ctls dictate the flow
         # of the connection etc.
 
-    async def listen(self, rpcroot: str) -> None:
+    async def listen(self, rpcroot: str) -> AsyncIterator[Optional[str]]:
         try:
             thiscon = self._ctls[rpcroot]
         except KeyError as ex:
             raise RuntimeError("ERROR: dir not announced") from ex
 
         rpcserver = RPCServer(rpcroot, thiscon.hostname, thiscon.port, thiscon.ssl)
-        await rpcserver.dolisten()
+        async for linedir in rpcserver.dolisten():
+            yield linedir

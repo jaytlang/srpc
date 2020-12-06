@@ -11,7 +11,7 @@ import pwd
 import grp
 import os
 import multiprocessing
-from typing import Dict
+from typing import Dict, Optional, Tuple
 
 from srpc.fs.qid import Qid
 from srpc.fs.fid import clunk_fid, FidData, mk_attach_fid, mk_walk_fid, stat_fid, write_fid
@@ -30,7 +30,7 @@ async def dispatch9(
     fidtable: Dict[int, FidData],
     qid: Qid,
     contained: bool
-) -> Message:
+) -> Tuple[Message, Optional[str]]:
     data_json = json.loads(msg.data)
     assert isinstance(data_json, dict)
 
@@ -47,13 +47,13 @@ async def dispatch9(
         try:
             mk_auth_afid(authreq9.afid, authreq9.uname, authreq9.aname)
         except RPCException as ex:
-            return encode_error(msg, ex)
+            return encode_error(msg, ex), None
 
         # So we haven't dropped privs and have a new afid. Good,
         # return this to the user for reading and writing.
         authresp = json.dumps(AuthResponse()._asdict())
         authresp_bytes = authresp.encode('utf-8')
-        return Message(MessageType.AUTHR, msg.tag, authresp_bytes)
+        return Message(MessageType.AUTHR, msg.tag, authresp_bytes), None
 
     if msg.message_type == MessageType.ATTACH:
         if contained:
@@ -65,7 +65,7 @@ async def dispatch9(
         # Before anything, check to make sure that the user is allowed
         # to make the insertion they are making.
         cloneroot = qid.clone(rpcroot + "/" + attreq9.aname)
-        print("Made clone dir")
+        print(f"Made clone dir {cloneroot}")
         try:
             attqid = mk_attach_fid(
                 attreq9.fid,
@@ -76,7 +76,7 @@ async def dispatch9(
             )
         except RPCException as ex:
             shutil.rmtree(cloneroot)
-            return encode_error(msg, ex)
+            return encode_error(msg, ex), None
 
         print("Made attach fid")
 
@@ -88,17 +88,17 @@ async def dispatch9(
         except RPCException as ex:
             shutil.rmtree(cloneroot)
             clunk_fid(attreq9.fid, fidtable)
-            return encode_error(msg, ex)
+            return encode_error(msg, ex), None
         print("Tok validated")
 
         # If we've gotten this far the user is who they say they are.
-        drop_privileges(attreq9.uname, fidtable, rpcroot)
+        drop_privileges(attreq9.uname, fidtable, rpcroot, qid)
 
         # Otherwise, we are all sandboxed! Made a new fid for the
         # user as they request, so return it their way.
         attresp : str = json.dumps(AttachResponse(attqid)._asdict())
         attresp_bytes: bytes = attresp.encode('utf-8')
-        return Message(MessageType.ATTACHR, msg.tag, attresp_bytes)
+        return Message(MessageType.ATTACHR, msg.tag, attresp_bytes), cloneroot
 
     # From here on out, security is a non-issue
     # because of the way fids work. If we're worried
@@ -111,13 +111,13 @@ async def dispatch9(
             try:
                 walkqid = mk_walk_fid(walkreq9.newfid, walkreq9.fid, walkreq9.path, fidtable, qid)
             except RPCException as ex:
-                return encode_error(msg, ex)
+                return encode_error(msg, ex), None
 
             walkresp = json.dumps(WalkResponse(walkqid)._asdict())
             walkresp_bytes: bytes = walkresp.encode('utf-8')
-            return Message(MessageType.WALKR, msg.tag, walkresp_bytes)
+            return Message(MessageType.WALKR, msg.tag, walkresp_bytes), None
         walkuname = fidtable[walkreq9.fid].uname
-        return await proxy9(walkuname, msg)
+        return await proxy9(walkuname, msg), None
 
     if msg.message_type == MessageType.STAT:
         statreq9 = StatRequest(**data_json)
@@ -127,13 +127,13 @@ async def dispatch9(
             try:
                 stat = stat_fid(statreq9.fid, fidtable, qid)
             except RPCException as ex:
-                return encode_error(msg, ex)
+                return encode_error(msg, ex), None
 
             stat_resp = StatResponse(stat.qid, stat.fname, stat.isdir, stat.children)
             statresp_bytes = json.dumps(stat_resp._asdict()).encode('utf-8')
-            return Message(MessageType.STATR, msg.tag, statresp_bytes)
+            return Message(MessageType.STATR, msg.tag, statresp_bytes), None
         uname = fidtable[statreq9.fid].uname
-        return await proxy9(uname, msg)
+        return await proxy9(uname, msg), None
 
     if msg.message_type == MessageType.APPEND:
         apreq9 = AppendRequest(**data_json)
@@ -143,13 +143,13 @@ async def dispatch9(
             try:
                 data = await write_fid(apreq9.fid, apreq9.data, fidtable, qid)
             except RPCException as ex:
-                return encode_error(msg, ex)
+                return encode_error(msg, ex), None
 
             wrresp = json.dumps(AppendResponse(data)._asdict())
             wrresp_bytes = wrresp.encode('utf-8')
-            return Message(MessageType.APPENDR, msg.tag, wrresp_bytes)
+            return Message(MessageType.APPENDR, msg.tag, wrresp_bytes), None
         appuname = fidtable[apreq9.fid].uname
-        return await proxy9(appuname, msg)
+        return await proxy9(appuname, msg), None
 
     if msg.message_type == MessageType.CLUNK:
         # Run this boi unconfined, since it never touches the qid layer
@@ -158,7 +158,7 @@ async def dispatch9(
         clunkreq9 = ClunkRequest(**data_json)
         clunk_fid(clunkreq9.fid, fidtable)
         clunkresp_bytes = json.dumps(ClunkResponse()._asdict()).encode('utf8')
-        return Message(MessageType.CLUNKR, msg.tag, clunkresp_bytes)
+        return Message(MessageType.CLUNKR, msg.tag, clunkresp_bytes), None
 
     raise RuntimeError("invalid message type")
 
@@ -186,7 +186,7 @@ def encode_error(original_msg: Message, ex: RPCException) -> Message:
 ctlcount : int = 1
 
 # Actually perform the descent
-def drop_privileges(uname: str, fidtable: Dict[int, FidData], rpcroot: str) -> None:
+def drop_privileges(uname: str, fidtable: Dict[int, FidData], rpcroot: str, qid: Qid) -> None:
     global ctlcount
 
     # We are about to descend to the new user through a fork
@@ -199,7 +199,7 @@ def drop_privileges(uname: str, fidtable: Dict[int, FidData], rpcroot: str) -> N
     Relays[uname] = ctlcount
     ctlcount += 1
 
-    child = multiprocessing.Process(target=mpenter, args=(Relays[uname], uname, rpcroot, fidtable))
+    child = multiprocessing.Process(target=mpenter, args=(Relays[uname], uname, rpcroot, fidtable, qid))
     child.start()
 
     print(f"9auth: successfully dropped privs on attach, root -> {uname}")
@@ -260,7 +260,7 @@ async def fs9(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> Non
         await writer.wait_closed()
         return None
 
-    response = await dispatch9(request, myrpcroot, myfidtable, myqid, True)
+    response, linedir = await dispatch9(request, myrpcroot, myfidtable, myqid, True)
     writer.write(encode_message(response))
     await writer.drain()
     writer.close()
