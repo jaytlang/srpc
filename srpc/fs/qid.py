@@ -6,11 +6,11 @@ import shutil
 import os
 import pwd
 import grp
-from typing import Tuple, List, Dict
+from typing import List, Dict
 
 from srpc.fs.dat import QidData, Stat
 from srpc.fs.unix import write_pipe, read_pipe
-from srpc.nine.dat import Error
+from srpc.nine.dat import Error, RPCException
 
 ROOT_QID = 0
 
@@ -126,7 +126,7 @@ class Qid:
             if self._qid_table[qid].fname == fname:
                 return qid
 
-        return Error.EBADPATH.value
+        raise RPCException(Error.EBADPATH)
 
     def register_qid(self, path: str, isdir: bool, isroot: bool = False) -> None:
         # Pop the QID into the table, with
@@ -149,24 +149,22 @@ class Qid:
         try:
             if data.isdir:
                 children = os.listdir(data.fname)
-        except OSError:
-            return Stat(Error.EOPENRDF.value, "", False, children)
+        except OSError as ex:
+            raise RPCException(Error.EOPENRDF) from ex
 
         return Stat(qid, userpath, data.isdir, children)
 
-    async def write_qid(self, qid: int, data: str) -> Tuple[str, int]:
+    async def write_qid(self, qid: int, data: str) -> str:
         qidinfo = self._qid_table[qid]
         qiddir = qidinfo.fname
 
         if qidinfo.isdir:
-            return "", Error.EOPENWRF.value
+            raise RPCException(Error.EOPENWRF)
 
-        qid_server_recv = qiddir + "/recv"
-        unix_wrres = await write_pipe(qid_server_recv, data)
-        if unix_wrres < 0:
-            return "", unix_wrres
+        qid_server_recv = os.path.join(qiddir, "recv")
+        await write_pipe(qid_server_recv, data)
 
         # Reading a directory has (sadly) been relegated
         # to stat. Doing the thing.
-        qid_server_send = qiddir + "/send"
+        qid_server_send = os.path.join(qiddir, "send")
         return await read_pipe(qid_server_send)

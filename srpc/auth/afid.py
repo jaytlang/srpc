@@ -9,13 +9,12 @@
 # the authentication protocol, we leave that
 # to auth modules also implemented here...
 
-from typing import Tuple
 import pathlib
 
 import pam
 
 from srpc.auth.dat import AFidData, AFidTable, AFidValidity
-from srpc.nine.dat import Error
+from srpc.nine.dat import Error, RPCException
 
 def sanitize_path(rpath: str) -> str:
     return str(pathlib.Path(rpath))
@@ -40,19 +39,18 @@ def clunk_afid(fidno: int) -> None:
 # Auth itself
 # Currently returns a dummy QID
 # equal to the original FID
-def mk_auth_afid(fidno: int, uname: str, aname: str) -> int:
+def mk_auth_afid(fidno: int, uname: str, aname: str) -> None:
     if fidno in AFidTable.keys():
-        return Error.EREUSEFD.value
+        raise RPCException(Error.EREUSEFD)
 
-    newdata: AFidData = AFidData(uname, sanitize_path(aname))
+    newdata = AFidData(uname, sanitize_path(aname))
     AFidTable[fidno] = newdata
     AFidValidity[fidno] = False
-    return fidno
 
 # These are all simple, synchronous operations...write included
-def write_afid(fidno: int, data: str) -> Tuple[str, int]:
+def write_afid(fidno: int, data: str) -> str:
     if fidno not in AFidTable:
-        return "", Error.ENOSCHFD.value
+        raise RPCException(Error.ENOSCHFD)
 
     # For now, we're making this simple: the password
     # is written to the clientmsg side of the afid.
@@ -62,5 +60,5 @@ def write_afid(fidno: int, data: str) -> Tuple[str, int]:
         AFidValidity[fidno] = True
 
     if AFidValidity[fidno]:
-        return "1", 0
-    return "0", 0
+        return "1"
+    return "0"

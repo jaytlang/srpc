@@ -13,14 +13,15 @@ import os
 import multiprocessing
 from typing import Dict
 
-from srpc.fs.fid import Error, clunk_fid, FidData, mk_attach_fid, mk_walk_fid, write_fid, stat_fid
 from srpc.fs.qid import Qid
+from srpc.fs.fid import clunk_fid, FidData, mk_attach_fid, mk_walk_fid, stat_fid, write_fid
 from srpc.auth.afid import mk_auth_afid
 from srpc.auth.dat import Relays
 from srpc.auth.privs import validate_token
 from srpc.nine.dat import MessageType, AuthRequest, AuthResponse, AttachRequest, \
     AttachResponse, WalkRequest, WalkResponse, AppendRequest, AppendResponse, \
-    ErrorResponse, ClunkRequest, ClunkResponse, StatRequest, StatResponse
+    ErrorResponse, ClunkRequest, ClunkResponse, StatRequest, StatResponse, \
+    RPCException
 from srpc.srv.dat import Message, encode_message, decode_message
 
 async def dispatch9(
@@ -43,13 +44,14 @@ async def dispatch9(
         # tokens, but if this process has already dropped privs
         # to a given user this request presently fails.
         authreq9 = AuthRequest(**data_json)
-        aqid = mk_auth_afid(authreq9.afid, authreq9.uname, authreq9.aname)
-        if aqid < 0:
-            return encode_error(msg, aqid)
+        try:
+            mk_auth_afid(authreq9.afid, authreq9.uname, authreq9.aname)
+        except RPCException as ex:
+            return encode_error(msg, ex)
 
         # So we haven't dropped privs and have a new afid. Good,
         # return this to the user for reading and writing.
-        authresp = json.dumps(AuthResponse(aqid)._asdict())
+        authresp = json.dumps(AuthResponse()._asdict())
         authresp_bytes = authresp.encode('utf-8')
         return Message(MessageType.AUTHR, msg.tag, authresp_bytes)
 
@@ -64,25 +66,29 @@ async def dispatch9(
         # to make the insertion they are making.
         cloneroot = qid.clone(rpcroot + "/" + attreq9.aname)
         print("Made clone dir")
-        attqid = mk_attach_fid(
-            attreq9.fid, attreq9.uname,
-            cloneroot + "/" + attreq9.aname,
-            fidtable,
-            qid
-        )
-        if attqid < 0:
+        try:
+            attqid = mk_attach_fid(
+                attreq9.fid,
+                attreq9.uname,
+                cloneroot + "/" + attreq9.aname,
+                fidtable,
+                qid
+            )
+        except RPCException as ex:
             shutil.rmtree(cloneroot)
-            return encode_error(msg, attqid)
+            return encode_error(msg, ex)
 
         print("Made attach fid")
 
         # The qid is blindly set up. We will now need to clunk
         # it if authentication fails.
         # Actually do authentication
-        if not validate_token(attreq9.afid, attreq9.uname, attreq9.aname):
+        try:
+            validate_token(attreq9.afid, attreq9.uname, attreq9.aname)
+        except RPCException as ex:
             shutil.rmtree(cloneroot)
             clunk_fid(attreq9.fid, fidtable)
-            return encode_error(msg, Error.EAUTHENT)
+            return encode_error(msg, ex)
         print("Tok validated")
 
         # If we've gotten this far the user is who they say they are.
@@ -102,9 +108,10 @@ async def dispatch9(
 
         if contained or walkreq9.fid not in fidtable.keys():
             print("9: walk")
-            walkqid : int = mk_walk_fid(walkreq9.newfid, walkreq9.fid, walkreq9.path, fidtable, qid)
-            if walkqid < 0:
-                return encode_error(msg, walkqid)
+            try:
+                walkqid = mk_walk_fid(walkreq9.newfid, walkreq9.fid, walkreq9.path, fidtable, qid)
+            except RPCException as ex:
+                return encode_error(msg, ex)
 
             walkresp = json.dumps(WalkResponse(walkqid)._asdict())
             walkresp_bytes: bytes = walkresp.encode('utf-8')
@@ -117,9 +124,10 @@ async def dispatch9(
 
         if contained or statreq9.fid not in fidtable.keys():
             print("9: stat")
-            stat = stat_fid(statreq9.fid, fidtable, qid)
-            if stat.qid < 0:
-                return encode_error(msg, stat.qid)
+            try:
+                stat = stat_fid(statreq9.fid, fidtable, qid)
+            except RPCException as ex:
+                return encode_error(msg, ex)
 
             stat_resp = StatResponse(stat.qid, stat.fname, stat.isdir, stat.children)
             statresp_bytes = json.dumps(stat_resp._asdict()).encode('utf-8')
@@ -132,11 +140,12 @@ async def dispatch9(
 
         if contained or apreq9.fid not in fidtable.keys():
             print("9: append")
-            data = await write_fid(apreq9.fid, apreq9.data, fidtable, qid)
-            if data[1] < 0:
-                return encode_error(msg, data[1])
+            try:
+                data = await write_fid(apreq9.fid, apreq9.data, fidtable, qid)
+            except RPCException as ex:
+                return encode_error(msg, ex)
 
-            wrresp = json.dumps(AppendResponse(data[0])._asdict())
+            wrresp = json.dumps(AppendResponse(data)._asdict())
             wrresp_bytes = wrresp.encode('utf-8')
             return Message(MessageType.APPENDR, msg.tag, wrresp_bytes)
         appuname = fidtable[apreq9.fid].uname
@@ -166,9 +175,9 @@ async def proxy9(uname: str, message: Message) -> Message:
     await writer.wait_closed()
     return rmessage
 
-def encode_error(original_msg: Message, errno: Error) -> Message:
-    print("9: error code %d", errno)
-    err_resp = json.dumps(ErrorResponse(errno.value)._asdict())
+def encode_error(original_msg: Message, ex: RPCException) -> Message:
+    print("9: error code", ex.err)
+    err_resp = json.dumps(ErrorResponse(ex.err.value)._asdict())
     err_bytes = err_resp.encode('utf-8')
     return Message(MessageType.ERROR, original_msg.tag, err_bytes)
 

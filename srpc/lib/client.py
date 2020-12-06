@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import json
-from typing import Optional, Dict, Type, NamedTuple, TypeVar
+from typing import Optional, Dict, Type, TypeVar
 from types import TracebackType
 
 from srpc.srv.dat import Message, SSLContextBuilder, encode_message, decode_message
@@ -69,13 +69,14 @@ class Client:
     ) -> ResponseMessage:
         tag = self._tag
         self._tag += 1
-        request_bytes = json.dumps(request._asdict()).encode('utf-8')  # type: ignore[attr-defined]  # excuse: didn't properly specify type
+        # type: ignore[attr-defined]  # excuse: didn't properly specify type
+        request_bytes = json.dumps(request._asdict()).encode('utf-8')
         message = Message(request_message_type, tag, request_bytes)
         response = await self._rpc(message)
         data_json = json.loads(response.data)
         # response message types are 1 more than the request type, by convention
         if message.message_type == MessageType(request_message_type.value + 1):
-            return response_message_cls(**data_json)  # type: ignore # excuse: 
+            return response_message_cls(**data_json)  # type: ignore
         if message.message_type == MessageType.ERROR:
             raise RPCException(data_json['errno'])
         raise ValueError("Invalid response from the server", data_json)
@@ -104,13 +105,13 @@ class Client:
         assert tag not in self._tag_to_response, "duplicate request id"
         self._tag_to_response[tag] = None
         request_message = Message(
-            rpc=message.rpc,
+            message_type=message.message_type,
             tag=tag,
             data=message.data
         )
         LOGGER.info(
-            "calling rpc_id(%d) tag(%d) data(%s)",
-            message.rpc,
+            "calling message_type(%d) tag(%d) data(%s)",
+            message.message_type,
             message.tag,
             message.data
         )
@@ -124,7 +125,7 @@ class Client:
                 assert response_message.tag == message.tag
                 LOGGER.info(
                     "responding rpc_id(%d) tag(%d) data(%s)",
-                    message.rpc_id,
+                    message.message_type,
                     tag,
                     response_message.data
                 )

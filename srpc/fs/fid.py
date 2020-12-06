@@ -1,11 +1,11 @@
 # FID<->QID mapping logic
 
 import pathlib
-from typing import Tuple, Dict
+from typing import Dict
 from srpc.fs.dat import FidData, Stat
 from srpc.fs.qid import Qid
 from srpc.auth.afid import write_afid, clunk_afid
-from srpc.nine.dat import Error
+from srpc.nine.dat import Error, RPCException
 
 def sanitize_path(rpath: str) -> str:
     return str(pathlib.Path(rpath))
@@ -24,11 +24,9 @@ def mk_attach_fid(
     qid: Qid
 ) -> int:
     aname_qid = qid.qid_for_aname(sanitize_path(aname))
-    if aname_qid < 0:
-        return aname_qid
 
     if fidno in fidtable.keys():
-        return Error.EREUSEFD.value
+        raise RPCException(Error.EREUSEFD)
 
     newdata = FidData(uname, None, aname_qid)
     fidtable[fidno] = newdata
@@ -43,11 +41,11 @@ def mk_walk_fid(
 ) -> int:
     try:
         olddata = fidtable[parentfid]
-    except KeyError:
-        return Error.ENOSCHFD.value
+    except KeyError as ex:
+        raise RPCException(Error.ENOSCHFD) from ex
 
     if fidno in fidtable.keys():
-        return Error.EREUSEFD.value
+        raise RPCException(Error.EREUSEFD)
 
     newpath = qid.qid_table[olddata.qid].fname
     if ".." in relpath:
@@ -56,8 +54,6 @@ def mk_walk_fid(
         newpath = sanitize_path(newpath + "/" + relpath)
 
     newpath_qid = qid.qid_for_aname(newpath)
-    if newpath_qid < 0:
-        return newpath_qid
 
     newdata = FidData(olddata.uname, parentfid, newpath_qid)
     fidtable[fidno] = newdata
@@ -66,8 +62,8 @@ def mk_walk_fid(
 def stat_fid(fidno: int, fidtable: Dict[int, FidData], qid: Qid) -> Stat:
     try:
         qid_num = fidtable[fidno].qid
-    except KeyError:
-        return Stat(Error.ENOSCHFD.value, "dontcare", False, [])
+    except KeyError as ex:
+        raise RPCException(Error.ENOSCHFD) from ex
     return qid.stat_qid(qid_num)
 
 async def write_fid(
@@ -75,7 +71,7 @@ async def write_fid(
     data: str,
     fidtable: Dict[int, FidData],
     qid: Qid
-) -> Tuple[str, int]:
+) -> str:
     if fidno not in fidtable:
         return write_afid(fidno, data)
 

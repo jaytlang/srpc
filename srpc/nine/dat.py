@@ -83,7 +83,7 @@ class AuthRequest(NamedTuple):
     aname: str
 
 class AuthResponse(NamedTuple):
-    aqid: int
+    pass
 
 class AttachRequest(NamedTuple):
     afid: int
@@ -128,6 +128,6 @@ class ErrorResponse(NamedTuple):
     errno: int
 
 class RPCException(Exception):
-    def __init__(self, errno: int):
-        self.errno = Error(errno)
+    def __init__(self, err: Error):
+        self.err = Error(err.value)
         super().__init__()
