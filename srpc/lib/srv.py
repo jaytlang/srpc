@@ -4,49 +4,44 @@ from typing import Dict
 import os
 import ssl
 import shutil
+
 from srpc.srv.srv import RPCServer
-from srpc.srv.dat import Con, Message, SSLContextBuilder
+from srpc.srv.dat import Con
 
-context : ssl.SSLContext = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-ctls : Dict[str, Con] = {}
+class Srv:
+    def __init__(self) -> None:
+        self._context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+        self._ctls: Dict[str, Con] = {}
 
-# Configure the ssl context automatically, for ease of use
-async def ssl_context_helper(certfile: str, keyfile: str) -> int:
-    global context
-    context.load_cert_chain(certfile = certfile, keyfile = keyfile)
-    return 0
+    # Configure the ssl context automatically, for ease of use
+    async def ssl_context_helper(self, certfile: str, keyfile: str) -> None:
+        self._context.load_cert_chain(certfile = certfile, keyfile = keyfile)
 
-async def announce(hostname: str, port: int, rpcroot: str) -> str:
-    global ctls
-    global context
+    async def announce(self, hostname: str, port: int, rpcroot: str) -> None:
+        newcon = Con(hostname, port, self._context)
+        if rpcroot in self._ctls.keys():
+            raise RuntimeError("ERROR: dir already announced")
+        self._ctls[rpcroot] = newcon
 
+        # Make necessary control structures
+        os.makedirs("/srv", exist_ok=True)
+        shutil.rmtree("/srv/ctl", ignore_errors=True)
+        os.mkdir("/srv/ctl/")
+        os.chmod("/srv/ctl/", 0o777)
 
-    newcon : Con = Con(hostname, port, context)
-    if rpcroot in ctls.keys(): return "ERROR: dir already announced"
-    ctls[rpcroot] = newcon
-    
-    # Make necessary control structures
-    try: os.mkdir("/srv")
-    except FileExistsError: pass
-    
-    shutil.rmtree("/srv/ctl", ignore_errors=True)
-    os.mkdir("/srv/ctl/")
-    os.chmod("/srv/ctl/", 0o777)
+        # All good. ctl/ gets populated when
+        # new connections pop open - for now,
+        # per unix user for simplicity. This is
+        # an effective simplifying assumption,
+        # but one that deviates from the 9P
+        # approach where ctls dictate the flow
+        # of the connection etc.
 
-    # All good. ctl/ gets populated when
-    # new connections pop open - for now,
-    # per unix user for simplicity. This is
-    # an effective simplifying assumption,
-    # but one that deviates from the 9P
-    # approach where ctls dictate the flow
-    # of the connection etc.
-    return rpcroot
+    async def listen(self, rpcroot: str) -> None:
+        try:
+            thiscon = self._ctls[rpcroot]
+        except KeyError as ex:
+            raise RuntimeError("ERROR: dir not announced") from ex
 
-async def listen(rpcroot: str) -> str:
-    global ctls
-
-    try: thiscon : Con = ctls[rpcroot]
-    except KeyError: return "ERROR: dir not announced"
-
-    rpcserver = RPCServer(rpcroot, thiscon.hostname, thiscon.port, thiscon.ssl) 
-    return await rpcserver.dolisten(rpcroot)
+        rpcserver = RPCServer(rpcroot, thiscon.hostname, thiscon.port, thiscon.ssl)
+        await rpcserver.dolisten()

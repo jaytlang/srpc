@@ -3,10 +3,7 @@
 # posted connections, not the actual files themselves
 
 import ssl
-import struct
-import asyncio
-import enum
-from typing import NamedTuple, Dict
+from typing import NamedTuple, Optional
 
 # Message format:
 # 32 bits - RPC ID
@@ -32,7 +29,6 @@ class Con(NamedTuple):
 # user authentication actually occurs. I think that's
 # how this works. Authentication is an L7 problem.
 
-from typing import Optional
 
 class SSLContextBuilder:
     def __init__(self, protocol: int, certfile: str, keyfile: Optional[str] = None):

@@ -7,3 +7,8 @@ disable=missing-module-docstring,
     too-many-arguments,
     too-few-public-methods,
     duplicate-code
+    too-many-statements,
+    too-many-branches,
+    too-many-locals,
+    too-many-return-statements
+good-names=f,p,ex

@@ -23,7 +23,7 @@
 #        or a list of stat structures in json form. This
 #        is used to get return values from RPCs.
 #
-# APPEND:write to a file, i.e. call an RPC. 
+# APPEND:write to a file, i.e. call an RPC.
 #
 # CLUNK: Unmap a fid/qid mapping, allowing the client to
 #        reuse it for a different server file / qid.
@@ -39,7 +39,7 @@
 # by the server for each file. Every server
 # RPC socket/template file must have a unique
 # qid, while multiple fids may (and may have to)
-# point to a given qid. 
+# point to a given qid.
 
 from enum import Enum
 from typing import NamedTuple, List
@@ -126,4 +126,3 @@ class ClunkRequest(NamedTuple):
 
 class ErrorResponse(NamedTuple):
     errno: int
-

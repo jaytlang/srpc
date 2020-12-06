@@ -11,56 +11,73 @@ import pwd
 import grp
 import os
 import multiprocessing
+from typing import Set, Dict
 
-from typing import Set, NamedTuple, Dict
-from srpc.fs.dat import Stat
-from srpc.fs.fid import *
-from srpc.fs.qid import clone
-from srpc.auth.afid import *
+from srpc.fs.fid import Error, clunk_fid, FidData, mk_attach_fid, mk_walk_fid, write_fid, stat_fid
+from srpc.fs.qid import Qid
+from srpc.auth.afid import mk_auth_afid
 from srpc.auth.dat import Relays
 from srpc.auth.privs import validate_token
-from srpc.nine.dat import *
+from srpc.nine.dat import ReqId, AuthRequest, AuthResponse, RespId, AttachRequest, \
+    AttachResponse, WalkRequest, WalkResponse, AppendRequest, AppendResponse, \
+    ErrorResponse, ClunkRequest, StatRequest, StatResponse
 from srpc.srv.dat import Message
 from srpc.srv.msg import encode_message, decode_message
 
-async def dispatch9(msg: Message, rpcroot: str, fidtable: Dict[int, FidData], contained: bool) -> Message:
-    # Check if the RPC is a valid one  
-    valid_requests : Set[int] = set(i.value for i in ReqId)
-    if msg.rpc not in valid_requests: return encode_error(msg, Error.EFAKERPC.value)
+
+async def dispatch9(
+    msg: Message,
+    rpcroot: str,
+    fidtable: Dict[int, FidData],
+    qid: Qid,
+    contained: bool
+) -> Message:
+    # Check if the RPC is a valid one
+    valid_requests: Set[int] = set(i.value for i in ReqId)
+    if msg.rpc not in valid_requests:
+        return encode_error(msg, Error.EFAKERPC.value)
 
     # If it is, decode the message
     data_json = json.loads(msg.data)
     assert isinstance(data_json, dict)
-    
+
     # Switch off between message types
-    if(msg.rpc == ReqId.AUTH.value):
-        if contained: raise ValueError
+    if msg.rpc == ReqId.AUTH.value:
+        if contained:
+            raise ValueError()
 
         print("9: auth")
         # You are allowed to derive multiple authentication
         # tokens, but if this process has already dropped privs
-        # to a given user this request presently fails. 
+        # to a given user this request presently fails.
         authreq9 = AuthRequest(**data_json)
-        aqid : int = mk_auth_afid(authreq9.afid, authreq9.uname, authreq9.aname)
-        if aqid < 0: return encode_error(msg, aqid)
-        
+        aqid = mk_auth_afid(authreq9.afid, authreq9.uname, authreq9.aname)
+        if aqid < 0:
+            return encode_error(msg, aqid)
+
         # So we haven't dropped privs and have a new afid. Good,
         # return this to the user for reading and writing.
-        authresp : str = json.dumps(AuthResponse(aqid)._asdict())
-        authresp_bytes: bytes = authresp.encode('utf-8')
+        authresp = json.dumps(AuthResponse(aqid)._asdict())
+        authresp_bytes = authresp.encode('utf-8')
         return Message(RespId.AUTHR.value, msg.tag, authresp_bytes)
 
-    elif(msg.rpc == ReqId.ATTACH.value):
-        if contained: raise ValueError
+    if msg.rpc == ReqId.ATTACH.value:
+        if contained:
+            raise ValueError()
 
         print("9: attach")
         attreq9 = AttachRequest(**data_json)
 
         # Before anything, check to make sure that the user is allowed
         # to make the insertion they are making.
-        cloneroot : str = clone(rpcroot + "/" + attreq9.aname, attreq9.uname)
-        print("Made clone dir") 
-        attqid : int = mk_attach_fid(attreq9.fid, attreq9.uname, cloneroot + "/" + attreq9.aname, fidtable)
+        cloneroot = qid.clone(rpcroot + "/" + attreq9.aname, attreq9.uname)
+        print("Made clone dir")
+        attqid = mk_attach_fid(
+            attreq9.fid, attreq9.uname,
+            cloneroot + "/" + attreq9.aname,
+            fidtable,
+            qid
+        )
         if attqid < 0:
             shutil.rmtree(cloneroot)
             return encode_error(msg, attqid)
@@ -88,60 +105,59 @@ async def dispatch9(msg: Message, rpcroot: str, fidtable: Dict[int, FidData], co
     # From here on out, security is a non-issue
     # because of the way fids work. If we're worried
     # about modern brute forces, just make the fids longer
-    elif(msg.rpc == ReqId.WALK.value):
-        walkreq9 = WalkRequest(**data_json)  
+    if msg.rpc == ReqId.WALK.value:
+        walkreq9 = WalkRequest(**data_json)
 
         if contained or walkreq9.fid not in fidtable.keys():
             print("9: walk")
-            walkqid : int = mk_walk_fid(walkreq9.newfid, walkreq9.fid, walkreq9.path, fidtable)
-            if walkqid < 0: return encode_error(msg, walkqid)
+            walkqid : int = mk_walk_fid(walkreq9.newfid, walkreq9.fid, walkreq9.path, fidtable, qid)
+            if walkqid < 0:
+                return encode_error(msg, walkqid)
 
-            walkresp : str = json.dumps(WalkResponse(walkqid)._asdict())
+            walkresp = json.dumps(WalkResponse(walkqid)._asdict())
             walkresp_bytes: bytes = walkresp.encode('utf-8')
             return Message(RespId.WALKR.value, msg.tag, walkresp_bytes)
-        else:
-            walkuname : str = fidtable[walkreq9.fid].uname
-            return await proxy9(walkuname, msg)
+        walkuname = fidtable[walkreq9.fid].uname
+        return await proxy9(walkuname, msg)
 
-    elif(msg.rpc == ReqId.STAT.value):
+    if msg.rpc == ReqId.STAT.value:
         statreq9 = StatRequest(**data_json)
 
         if contained or statreq9.fid not in fidtable.keys():
             print("9: stat")
-            stat : Stat = stat_fid(statreq9.fid, fidtable)
-            if stat.qid < 0: return encode_error(msg, stat.qid)
+            stat = stat_fid(statreq9.fid, fidtable, qid)
+            if stat.qid < 0:
+                return encode_error(msg, stat.qid)
 
-            statresp : str = json.dumps(StatResponse(stat.qid, stat.fname, stat.isdir, stat.children)._asdict())
-            statresp_bytes: bytes = statresp.encode('utf-8')
+            stat_resp = StatResponse(stat.qid, stat.fname, stat.isdir, stat.children)
+            statresp_bytes = json.dumps(stat_resp._asdict()).encode('utf-8')
             return Message(RespId.STATR.value, msg.tag, statresp_bytes)
-        else:
-            uname : str = fidtable[statreq9.fid].uname
-            return await proxy9(uname, msg)
+        uname = fidtable[statreq9.fid].uname
+        return await proxy9(uname, msg)
 
-    elif(msg.rpc == ReqId.APPEND.value):
+    if msg.rpc == ReqId.APPEND.value:
         apreq9 = AppendRequest(**data_json)
 
         if contained or apreq9.fid not in fidtable.keys():
             print("9: append")
-            data : Tuple[str, int] = await write_fid(apreq9.fid, len(apreq9.data), apreq9.data, fidtable)
-            if data[1] < 0: return encode_error(msg, data[1])
+            data = await write_fid(apreq9.fid, apreq9.data, fidtable, qid)
+            if data[1] < 0:
+                return encode_error(msg, data[1])
 
-            wrresp : str = json.dumps(AppendResponse(data[0])._asdict())
-            wrresp_bytes : bytes = wrresp.encode('utf-8')
+            wrresp = json.dumps(AppendResponse(data[0])._asdict())
+            wrresp_bytes = wrresp.encode('utf-8')
             return Message(RespId.APPENDR.value, msg.tag, wrresp_bytes)
-        else:
-            appuname : str = fidtable[apreq9.fid].uname
-            return await proxy9(appuname, msg)
+        appuname = fidtable[apreq9.fid].uname
+        return await proxy9(appuname, msg)
 
     # Run this boi unconfined, since it never touches the qid layer
     # and it just deals with fids
-    else:
-        print("9: clunk")
-        clunkreq9 = ClunkRequest(**data_json)
-        clunk_fid(clunkreq9.fid, fidtable)
-        clunkresp_bytes : bytes = "".encode('utf-8')
-        return Message(RespId.CLUNKR.value, msg.tag, clunkresp_bytes)
-        
+    print("9: clunk")
+    clunkreq9 = ClunkRequest(**data_json)
+    clunk_fid(clunkreq9.fid, fidtable)
+    clunkresp_bytes = "".encode('utf-8')
+    return Message(RespId.CLUNKR.value, msg.tag, clunkresp_bytes)
+
 async def proxy9(uname: str, message: Message) -> Message:
     print("9: proxy")
     ctl : str = "/srv/ctl/" + str(Relays[uname])
@@ -177,7 +193,8 @@ def drop_privileges(uname: str, fidtable: Dict[int, FidData], rpcroot: str) -> N
     # and the child will initiate a server to catch further
     # stuff from us.
 
-    if uname in Relays.keys(): return None
+    if uname in Relays.keys():
+        return
     Relays[uname] = ctlcount
     ctlcount += 1
 
@@ -187,18 +204,20 @@ def drop_privileges(uname: str, fidtable: Dict[int, FidData], rpcroot: str) -> N
     print(f"9auth: successfully dropped privs on attach, root -> {uname}")
 
 # MULTIUSER SHIM LAYER #
-myfidtable : Dict[int, FidData] = {}
-myrpcroot : str = ""
-myctl : int = 0
+myfidtable: Dict[int, FidData] = {}
+myrpcroot = ""
+myctl = 0
+myqid = Qid()
 
 # On initialization, receives a reference
 # to the master fid dictionary for this connection,
 # in addition to the user to downgrade to and
-# the ctl to utilize. 
-def mpenter(ctl: int, uname: str, rpcroot: str, fidtable: Dict[int, FidData]) -> None:
+# the ctl to utilize.
+def mpenter(ctl: int, uname: str, rpcroot: str, fidtable: Dict[int, FidData], qid: Qid) -> None:
     global myfidtable
     global myrpcroot
     global myctl
+    global myqid
 
     # First, drop privileges and store proc-specific vars
     newuid : int = pwd.getpwnam(uname)[2]
@@ -206,17 +225,15 @@ def mpenter(ctl: int, uname: str, rpcroot: str, fidtable: Dict[int, FidData]) ->
     os.setgid(newgid)
     os.setuid(newuid)
 
-    myfidtable = fidtable 
+    myfidtable = fidtable
     myrpcroot = rpcroot
     myctl = ctl
+    myqid = qid
 
     asyncio.run(start9fs())
-    
 
 # Asynchronous entry point. Start up a server
 async def start9fs() -> None:
-    global myfidtable
-    global myrpcroot
     global myctl
 
     server = await asyncio.start_unix_server(
@@ -233,16 +250,16 @@ async def fs9(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> Non
     global myfidtable
     global myrpcroot
     global myctl
+    global myqid
 
-    try: request : Message = await decode_message(reader)
+    try:
+        request = await decode_message(reader)
     except asyncio.IncompleteReadError:
         writer.close()
         await writer.wait_closed()
         return None
 
-    response : Message = await dispatch9(request, myrpcroot, myfidtable, True)
+    response = await dispatch9(request, myrpcroot, myfidtable, True, myqid)
     writer.write(encode_message(response))
     await writer.drain()
-    
     writer.close()
-

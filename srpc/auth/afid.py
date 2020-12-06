@@ -9,11 +9,13 @@
 # the authentication protocol, we leave that
 # to auth modules also implemented here...
 
-from srpc.auth.dat import AFidData, AFidTable, AFidValidity
-from srpc.nine.dat import Error
 from typing import Tuple
 import pathlib
+
 import pam
+
+from srpc.auth.dat import AFidData, AFidTable, AFidValidity
+from srpc.nine.dat import Error
 
 def sanitize_path(rpath: str) -> str:
     return str(pathlib.Path(rpath))
@@ -32,35 +34,33 @@ def clunk_afid(fidno: int) -> None:
     try:
         del AFidTable[fidno]
         del AFidValidity[fidno]
-    except KeyError: pass
+    except KeyError:
+        pass
 
 # Auth itself
 # Currently returns a dummy QID
 # equal to the original FID
 def mk_auth_afid(fidno: int, uname: str, aname: str) -> int:
-    if fidno in AFidTable.keys(): return Error.EREUSEFD.value
-    
+    if fidno in AFidTable.keys():
+        return Error.EREUSEFD.value
+
     newdata: AFidData = AFidData(uname, sanitize_path(aname))
     AFidTable[fidno] = newdata
     AFidValidity[fidno] = False
     return fidno
-    
+
 # These are all simple, synchronous operations...write included
-def write_afid(fidno: int, count: int, data: str) -> Tuple[str, int]:
-    try:
-        afidinfo: AFidData = AFidTable[fidno]
-    except KeyError: return "", Error.ENOSCHFD.value
+def write_afid(fidno: int, data: str) -> Tuple[str, int]:
+    if fidno not in AFidTable:
+        return "", Error.ENOSCHFD.value
 
     # For now, we're making this simple: the password
     # is written to the clientmsg side of the afid.
     # The server authenticates this against PAM.
-    actualcount: int = len(data)
-    if(count < actualcount):
-        actualcount = count
-        data = data[0:count - 1]
 
     if authenticate(AFidTable[fidno].uname, data):
         AFidValidity[fidno] = True
 
-    if AFidValidity[fidno]: return "1", 0
-    else: return "0", 0
+    if AFidValidity[fidno]:
+        return "1", 0
+    return "0", 0

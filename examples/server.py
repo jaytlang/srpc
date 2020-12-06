@@ -1,18 +1,23 @@
-from srpc.lib.srv import *
-import multiprocessing
 import asyncio
 import os
+import sys
+
+from srpc.lib.srv import Srv
 
 async def main() -> None:
-    await ssl_context_helper("srpc.crt", "srpc.key")
-    await announce("localhost", 42069, "/home/notthensa/test")
-    await listen("/home/notthensa/test")
-    while True: await asyncio.sleep(0)
+    srv = Srv()
+    await srv.ssl_context_helper(
+        os.path.join(os.path.dirname(__file__), "srpc.crt"),
+        os.path.join(os.path.dirname(__file__), "srpc.key"))
+    await srv.announce("localhost", 42069, "/home/notthensa/test")
+    await srv.listen("/home/notthensa/test")
+    while True:
+        await asyncio.sleep(0)
 
 if __name__ == "__main__":
-    if(os.getuid() != 0):
+    if os.getuid() != 0:
         print("Error: you should start the server as root!")
-        exit()
+        sys.exit(1)
     else:
         loop = asyncio.get_event_loop()
         loop.run_until_complete(main())

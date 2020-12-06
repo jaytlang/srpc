@@ -4,7 +4,7 @@
 # requests made through library routines into tangible
 # operations on the host filesystem i.e. the UNIX
 # sockets which the server is listening on at each
-# endpoint. 
+# endpoint.
 
 # FIDs and QIDs are just integers, so they don't
 # require any introduction here. However, the
@@ -18,8 +18,7 @@
 # FID space is fine because we fork ahead of every
 # attachment, so these structures won't share
 # any info
-from typing import NamedTuple, Optional, Dict, List
-import asyncio
+from typing import NamedTuple, Optional, List
 
 class Stat(NamedTuple):
     qid: int
@@ -40,8 +39,3 @@ class FidData(NamedTuple):
 class QidData(NamedTuple):
     fname: str
     isdir: bool
-
-ROOT_QID = 0
-
-# Shared datastructure: the QID table
-QidTable: Dict[int, QidData] = {}
