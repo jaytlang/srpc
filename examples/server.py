@@ -11,9 +11,9 @@ async def main() -> None:
     await srv.ssl_context_helper(
         os.path.join(os.path.dirname(__file__), "srpc.crt"),
         os.path.join(os.path.dirname(__file__), "srpc.key"))
-    await srv.announce("localhost", 42069, "/tmp/echo")
+    await srv.announce("localhost", 42069, "/home/guest/echo")
 
-    async for linedir in srv.listen("/tmp/echo"):
+    async for linedir in srv.listen("/home/guest/echo"):
         print(f"New linedir: {linedir}")
         loop = asyncio.get_event_loop()
         if linedir is not None:

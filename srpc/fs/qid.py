@@ -93,12 +93,13 @@ class Qid:
                 os.mkfifo(clonepath + "/recv")
                 os.mkfifo(clonepath + "/send")
 
+                shutil.copystat(fpath, clonepath + "/recv")
                 shutil.chown(
                         clonepath + "/recv",
                         user=pwd.getpwuid(os.stat(fpath).st_uid).pw_name,
                         group=grp.getgrgid(os.stat(fpath).st_gid).gr_name
                         )
-
+                shutil.copystat(fpath, clonepath + "/send")
                 shutil.chown(
                         clonepath + "/send",
                         user=pwd.getpwuid(os.stat(fpath).st_uid).pw_name,
